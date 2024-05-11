@@ -4,6 +4,14 @@ from helpers import paths_helper
 from payment_return import payment_return
 from payroll_remittance import payroll_remittance
 
+"""
+.env colocado no lugar do exe
+extDataDir = os.getcwd()
+if getattr(sys, 'frozen', False):
+    extDataDir = sys._MEIPASS
+load_dotenv(dotenv_path=os.path.join(extDataDir, '.env'))
+"""
+
 load_dotenv()
 
 
