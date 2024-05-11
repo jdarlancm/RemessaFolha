@@ -1,0 +1,21 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+pandas = "=2.2.2"
+openpyxl = "=3.1.2"
+python-dotenv = "=1.0.1"
+pypdf = "=4.2.0"
+google-api-python-client = "=2.127.0"
+google-auth-httplib2 = "=0.2.0"
+google-auth-oauthlib = "=1.2.0"
+
+[dev-packages]
+pytest = "=8.2.0"
+pandas-stubs = "=2.2.1*"
+types-openpyxl = "=3.1.0"
+
+[requires]
+python_version = "3.12"
