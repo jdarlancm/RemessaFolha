@@ -13,5 +13,3 @@ Pipfile.lock
 logfile.log
 token.json
 client_secret.json
-
-!/examples/*.env

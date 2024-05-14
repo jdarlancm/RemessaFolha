@@ -4,6 +4,7 @@ from helpers import paths_helper
 from payment_return import payment_return
 from payroll_remittance import payroll_remittance
 
+VERSION = "1.0.0"
 """
 .env colocado no lugar do exe
 extDataDir = os.getcwd()
