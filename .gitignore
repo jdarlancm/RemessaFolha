@@ -9,7 +9,6 @@ __pycache__/
 *.egg-info/
 
 .env
-Pipfile.lock
 logfile.log
 token.json
 client_secret.json
