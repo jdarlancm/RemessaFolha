@@ -10,6 +10,7 @@ from helpers.paths_helper import (
   get_payroll_year_complete_filename,
   get_payckeck_complete_filename,
   get_payroll_receipts_folder_and_create_if_not_exists,
+  get_payroll_temp_folder,
   get_employee_payckeck_filename,
   get_payroll_month_folder
 )
@@ -366,22 +367,34 @@ class PayrollRepository:
 
     def process_payment_receipts(self, remittance: PayrollRemittance) -> None:
         """Process payment receipts for the given remittance."""
-        temp_folder = get_payroll_receipts_folder_and_create_if_not_exists(
+        # Obter caminhos das pastas
+        temp_folder = get_payroll_temp_folder(
+            remittance.reference_month,
+            remittance.reference_year
+        )
+        receipts_folder = get_payroll_receipts_folder_and_create_if_not_exists(
             remittance.reference_month,
             remittance.reference_year
         )
         
-        # Listar comprovantes
+        # Listar comprovantes na pasta temp
         receipt_files = os_utils.list_files(temp_folder, ".pdf")
         if not receipt_files:
-            raise FileNotFoundError("Nenhum comprovante encontrado.")
+            raise FileNotFoundError(f"Nenhum comprovante encontrado em {temp_folder}")
             
+        print(f"Processando {len(receipt_files)} comprovantes...")
+        
         # Processar cada comprovante
         for receipt_file in receipt_files:
+            print(f"Processando arquivo: {receipt_file}")
+            
             # Extrair dados do favorecido
             payee_data = self._extract_payee_from_receipt(temp_folder, receipt_file)
             if not payee_data:
+                print(f"  -> Não foi possível extrair dados do favorecido")
                 continue
+                
+            print(f"  -> Favorecido: {payee_data['first_name']} {payee_data['last_name']}")
                 
             # Buscar funcionário correspondente
             employee = self._find_employee_by_name(
@@ -390,9 +403,20 @@ class PayrollRepository:
                 payee_data["last_name"]
             )
             
-            # Renomear arquivo
+            print(f"  -> Funcionário encontrado: {employee.name} (matrícula {employee.registration})")
+            
+            # Criar novo nome do arquivo
             new_name = f"{employee.registration}-{employee.name}-pagamento.pdf"
-            self._rename_receipt(temp_folder, receipt_file, new_name)
+            
+            # Mover arquivo da pasta temp para a pasta de comprovantes
+            os.rename(
+                f"{temp_folder}\\{receipt_file}",
+                f"{receipts_folder}\\{new_name}"
+            )
+            
+            print(f"  -> Arquivo movido para: {receipts_folder}\\{new_name}")
+            
+        print("Processamento de comprovantes concluído.")
             
     def _extract_payee_from_receipt(
         self,
