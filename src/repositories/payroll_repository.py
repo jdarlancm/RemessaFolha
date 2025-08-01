@@ -192,6 +192,7 @@ class PayrollRepository:
                     f"Não foi possível extrair o valor líquido do contra-cheque "
                     f"do funcionário {employee_name} (matrícula {registration})"
                 )
+
             amount = float(amount_str.replace(",", "."))
 
             # Usar dados do funcionário já carregado
@@ -239,19 +240,8 @@ class PayrollRepository:
 
     def _extract_net_salary(self, page_content: str) -> Optional[str]:
         """Extract net salary from paycheck content."""
-        lines = page_content.split("\n")
-        
-        for line in lines:
-            if "LÍQUIDO" in line:
-                # Dependendo das rubricas a posicao ao quebrar com \n pode variar
-                if line.startswith("VALOR LÍQUIDO"):
-                    return line.split(" ")[2].replace(".", "")
-                elif line.startswith(" ____ /"):
-                    temp = line.split("LÍQUIDO")[1]
-                    return temp.strip().split(" ")[0].replace(".", "")
-                    
-        return None
-
+        return extract_net_salary(page_content)
+    
     def save_remittance(self, remittance: PayrollRemittance) -> PayrollRemittance:
         """Save the remittance batch and update control sheet."""
         # Criar arquivo de remessa no diretório do mês

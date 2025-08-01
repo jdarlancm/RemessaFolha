@@ -35,18 +35,17 @@ def extract_net_salary(page_content: str) -> Optional[str]:
     Returns:
         Optional[str]: The net salary amount without dots, or None if not found
     """
+    import re
+    
     lines = page_content.split("\n")
     
     for line in lines:
-        if "LÍQUIDO" not in line:
-            continue
-            
-        # Handle different paycheck formats
-        if line.startswith("VALOR LÍQUIDO"):
-            return line.split(" ")[2].replace(".", "")
-            
-        if line.startswith(" ____ /"):
-            temp = line.split("LÍQUIDO")[1]
-            return temp.strip().split(" ")[0].replace(".", "")
-            
+        if "VALOR LÍQUIDO" in line:
+            # Procura por um padrão de número com ponto e vírgula após "VALOR LÍQUIDO"
+            match = re.search(r'VALOR\s+LÍQUIDO\s+(\d{1,3}(?:\.\d{3})*,\d{2})', line)
+            if match:
+                value = match.group(1)
+                # Remove os pontos mantendo a vírgula
+                return value.replace(".", "")
+                
     return None
