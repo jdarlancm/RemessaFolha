@@ -11,7 +11,7 @@ def get_first_last_name_employee(year, matricula):
         return None
 
     name_parts = (
-        string_utils.remove_accents_and_special_characters(employee_info["nome"])
+        string_utils.normalize_text(employee_info["nome"])
         .upper()
         .split(" ")
     )

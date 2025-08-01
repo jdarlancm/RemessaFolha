@@ -54,9 +54,15 @@ def test_get_payroll_temp_folder(patch_env, tmp_path):
 
 
 def test_get_payckeck_complete_filename(patch_env, tmp_path):
-    paths_helper.get_payckeck_complete_filename(
+    path = tmp_path / "2024" / "01-jan"
+    path.mkdir(parents=True, exist_ok=True)
+    
+    path_filename = path / "Contra-Cheque.pdf"
+    path_filename.touch()
+    
+    assert paths_helper.get_payckeck_complete_filename(
         1, 2024
-    ) == rf"{tmp_path}\2024\01-jan\Conta-Cheque.pdf"
+    ) == rf"{tmp_path}\2024\01-jan\Contra-Cheque.pdf"
 
 
 def test_get_paycheck_filename():

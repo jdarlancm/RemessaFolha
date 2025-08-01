@@ -1,0 +1,9 @@
+---
+description: 
+globs: *.py
+alwaysApply: false
+---
+- Siga as conveções e boas praticas do python para estrutura do projeto e nomenclaturas
+- use a tabulação com 2 espaços
+
+- Crie um codigo limpo (clean code)
