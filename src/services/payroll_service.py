@@ -100,8 +100,8 @@ class PayrollService:
                     if paycheck.employee.registration == employee.registration:
                         employee.paycheck = paycheck
                         break
-                        
-                self.notification_service.notify_payment(employee, reference_date)
+                
+                #self.notification_service.notify_payment(employee, reference_date)
                 notified.append(employee)
                 
         return notified 

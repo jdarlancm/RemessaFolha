@@ -1,3 +1,4 @@
+import os
 from datetime import date
 from typing import Optional
 
@@ -24,10 +25,23 @@ class NotificationService:
         subject = f"Comprovante de Pagamento - {reference_date.strftime('%m/%Y')}"
         body = self._create_notification_body(employee, reference_date)
         
+        # Get both paycheck and payment receipt files
         attachments = []
         if hasattr(employee, 'paycheck') and employee.paycheck.file_path:
-            attachments.append(employee.paycheck.file_path)
+            # Add contra-cheque
+            if os.path.exists(employee.paycheck.file_path):
+                attachments.append(employee.paycheck.file_path)
+            
+            # Add payment receipt - same folder as paycheck but with different suffix
+            receipt_path = employee.paycheck.file_path.replace("Contra-Cheque.pdf", "pagamento.pdf")
+            print(receipt_path)
+            if os.path.exists(receipt_path):
+                attachments.append(receipt_path)
         
+        if not attachments:
+            print(f"Warning: No attachments found for employee {employee.name} ({employee.registration})")
+            return
+            
         self.gmail_service.send_email(
             to=employee.email,
             subject=subject,

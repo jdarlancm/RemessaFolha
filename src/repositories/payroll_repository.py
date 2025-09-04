@@ -50,10 +50,15 @@ class PayrollRepository:
                 agencia = None
 
             print(f"Dados bancários - {row['nome']}: conta={conta}, agencia={agencia}")
+            # Get email from the row
+            email = str(row.get("email", "")).strip()
+            if email == "nan" or not email:
+                email = None
+
             employee = Employee(
                 name=row["nome"],
-                email=None,  # Email será preenchido em outra planilha
-                registration=str(row["codigo"]),
+                email=email,
+                registration=str(row["codigo"]).zfill(3),  # Ensure 3 digits
                 cpf=str(row["cpf"]),
                 bank_account=conta,
                 bank_branch=agencia
@@ -166,10 +171,13 @@ class PayrollRepository:
             page = reader.pages[page_idx]
             page_content = page.extract_text()
 
+            print(f"Processando página {page_idx}...")
+
             if not self._is_paycheck_page(page_content):
                 continue
 
             registration = self._extract_registration_from_paycheck(page_content)
+
             employee_name = get_first_last_name_employee(
                 reference_date.year,
                 registration
@@ -226,6 +234,7 @@ class PayrollRepository:
         ROW_EMPLOYEE_DATA = 2
         COL_MATRICULA = -2
         lines = page_content.split("\n")
+        print(f"Linhas: {lines}")
         matricula = lines[ROW_EMPLOYEE_DATA].strip().split(" ")[COL_MATRICULA]
         return int(matricula) if matricula else 0
 
@@ -317,7 +326,12 @@ class PayrollRepository:
         if not remittance_data:
             return None
         
-        # Converter para objetos do domínio
+        # Primeiro vamos carregar todos os funcionários da planilha para ter os emails
+        all_employees = {
+            emp.registration: emp 
+            for emp in self.get_employees(reference_date)
+        }
+        
         employees = []
         paychecks = []
         total = 0.0
@@ -330,15 +344,21 @@ class PayrollRepository:
         paycheck_files = os_utils.list_files(receipts_path, ".pdf")
         
         for row in remittance_data:
-            employee = Employee(
-                name=row["nome"],
-                email=None,
-                registration=row["matricula"],
-                bank_account=row["conta"],
-                bank_branch=row["agencia"]
-            )
-            employees.append(employee)
+            registration = str(row["matricula"]).zfill(3)
             
+            if registration in all_employees:
+                employee = all_employees[registration]
+            else:
+                print(f"Aviso: Funcionário {row['nome']} (matrícula {registration}) não encontrado na planilha")
+                employee = Employee(
+                    name=row["nome"],
+                    email=row["email"],
+                    registration=registration,
+                    bank_account=row["conta"],
+                    bank_branch=row["agencia"]
+                )
+            
+            employees.append(employee)
             amount = float(row["salario"])
             total += amount
             
