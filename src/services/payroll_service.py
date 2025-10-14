@@ -1,7 +1,7 @@
 from datetime import date
 from typing import List, Optional
 
-from domain.payroll import Employee, PayrollRemittance
+from domain.payroll import Employee, PayrollRemittance, Paycheck
 from repositories.payroll_repository import PayrollRepository
 from services.notification_service import NotificationService
 from services.spreadsheet_service import SpreadsheetService
@@ -84,7 +84,7 @@ class PayrollService:
             reference_date: The reference date for the payroll
             
         Returns:
-            List of employees that were notified
+            List of employees that were successfully notified
         """
         # Get payment return data
         remittance = self.repository.get_remittance(reference_date)
@@ -93,15 +93,76 @@ class PayrollService:
             
         # Notify employees
         notified = []
+        failed_notifications = []
+        skipped_no_email = []
+        skipped_no_paycheck = []
+        
         for employee in remittance.employees:
-            if employee.email:
-                # Associar contracheque ao funcionário
-                for paycheck in remittance.paychecks:
-                    if paycheck.employee.registration == employee.registration:
-                        employee.paycheck = paycheck
-                        break
+            if not employee.email:
+                skipped_no_email.append(employee)
+                print(f"SK {employee.name} ({employee.registration}) - Skipping - no email")
+                continue
                 
-                #self.notification_service.notify_payment(employee, reference_date)
-                notified.append(employee)
+            # Associate paycheck with employee (create a copy to avoid mutation)
+            employee_with_paycheck = self._associate_paycheck(employee, remittance.paychecks)
+            
+            if not employee_with_paycheck:
+                skipped_no_paycheck.append(employee)
+                print(f"SK {employee.name} ({employee.registration}) - Skipping - no paycheck found")
+                continue
                 
-        return notified 
+            try:
+                success = self.notification_service.notify_payment(employee_with_paycheck, reference_date)
+                if success:
+                    notified.append(employee_with_paycheck)
+                else:
+                    failed_notifications.append(employee_with_paycheck)
+                    print(f"ER {employee.name} ({employee.registration}) - Ocorreu um erro - Falha ao preparar email")
+                    
+            except Exception as e:
+                failed_notifications.append(employee_with_paycheck)
+                print(f"ER {employee.name} ({employee.registration}) - Ocorreu um erro - {str(e)}")
+                
+        # Summary
+        print(f"\nResumo dos e-mails:")
+        print(f"  OK - Preparados com sucesso: {len(notified)}")
+        
+        if skipped_no_email:
+            print(f"  Pulados sem e-mail: {len(skipped_no_email)}")
+            
+        if skipped_no_paycheck:
+            print(f"  Pulados sem contracheque: {len(skipped_no_paycheck)}")
+            
+        if failed_notifications:
+            print(f"  ERRO - Falharam na preparação: {len(failed_notifications)}")
+                
+        print(f"{len(notified)} funcionários notificados.")
+                
+        return notified
+    
+    def _associate_paycheck(self, employee: Employee, paychecks: List[Paycheck]) -> Optional[Employee]:
+        """
+        Associate paycheck with employee without mutating the original employee.
+        
+        Args:
+            employee: The employee to associate paycheck with
+            paychecks: List of available paychecks
+            
+        Returns:
+            Employee with associated paycheck or None if not found
+        """
+        for paycheck in paychecks:
+            if paycheck.employee.registration == employee.registration:
+                # Create a copy of the employee to avoid mutation
+                employee_copy = Employee(
+                    name=employee.name,
+                    email=employee.email,
+                    registration=employee.registration,
+                    cpf=employee.cpf,
+                    bank_account=employee.bank_account,
+                    bank_branch=employee.bank_branch
+                )
+                employee_copy.paycheck = paycheck
+                return employee_copy
+                
+        return None 

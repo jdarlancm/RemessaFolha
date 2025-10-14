@@ -360,11 +360,21 @@ class PayrollRepository:
             
             # Buscar arquivo do contracheque
             file_path = ""
+            expected_pattern = f"{employee.registration}-{employee.name}"
+            
             for paycheck_file in paycheck_files:
-                if (paycheck_file.startswith(f"{employee.registration}-{employee.name}") and
+                if (paycheck_file.startswith(expected_pattern) and
                     paycheck_file.endswith("Contra-Cheque.pdf")):
                     file_path = f"{receipts_path}\\{paycheck_file}"
                     break
+            
+            if not file_path:
+                # Busca alternativa - procurar por matrícula apenas
+                for paycheck_file in paycheck_files:
+                    if (paycheck_file.startswith(f"{employee.registration}-") and
+                        paycheck_file.endswith("Contra-Cheque.pdf")):
+                        file_path = f"{receipts_path}\\{paycheck_file}"
+                        break
             
             paycheck = Paycheck(
                 employee=employee,

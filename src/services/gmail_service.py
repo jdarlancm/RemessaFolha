@@ -1,6 +1,7 @@
 """Gmail service for sending emails."""
 import os.path
 import base64
+import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
@@ -26,6 +27,7 @@ class GmailService:
   
   def __init__(self):
     self.creds = None
+    self.logger = logging.getLogger(__name__)
     self._authenticate()
     
   def _authenticate(self):
@@ -94,5 +96,13 @@ class GmailService:
       ).execute()
       
     except HttpError as error:
-      print(f"An error occurred: {error}")
+      self.logger.error(f"Gmail API error sending email to {to}: {error}")
+      if error.resp.status == 403:
+        raise PermissionError(f"Gmail API access denied. Check permissions and authentication.")
+      elif error.resp.status == 400:
+        raise ValueError(f"Invalid email request: {error}")
+      else:
+        raise RuntimeError(f"Gmail API error: {error}")
+    except Exception as error:
+      self.logger.error(f"Unexpected error sending email to {to}: {error}")
       raise 
