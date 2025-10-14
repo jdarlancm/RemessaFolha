@@ -1,12 +1,13 @@
 """Service for managing control spreadsheets."""
-from datetime import date
+import pdfplumber
+
 from typing import List, Dict, Optional
 from openpyxl import load_workbook
 from pypdf import PdfReader
 
 from domain.payroll import PayrollRemittance
 from helpers import paths_helper, paycheck_helper
-from utils import os_utils, date_utils
+from utils import date_utils
 
 class SpreadsheetService:
   """Service for managing payroll control spreadsheets."""
@@ -40,28 +41,27 @@ class SpreadsheetService:
         continue
         
       # Extrair dados do contracheque
-      first_page = 0
-      reader = PdfReader(paycheck.file_path)
-      page_content = reader.pages[first_page].extract_text()
-      
-      # Verificar se é um contracheque
-      if not "RECIBO DE PAGAMENTO DE SALÁRIO" in page_content:
-        continue
+      with pdfplumber.open(paycheck.file_path) as pdf:
+        page_content = pdf.pages[0].extract_text()
+
+        # Verificar se é um contracheque
+        if not "RECIBO DE PAGAMENTO DE SALÁRIO" in page_content:
+          continue
         
-      # Extrair matrícula e salário
-      matricula = paycheck_helper.extract_matricula(page_content)
-      salario_liquido = paycheck_helper.extract_net_salary(page_content)
+        # Extrair matrícula e salário
+        matricula = paycheck_helper.extract_matricula(page_content)
+        salario_liquido = paycheck_helper.extract_net_salary(page_content)
       
-      if not salario_liquido or matricula == 0:
-        raise ValueError(
-          f"Não foi possível obter informações do funcionário no contra-cheque "
-          f"({paycheck.file_path})"
-        )
+        if not salario_liquido or matricula == 0:
+          raise ValueError(
+            f"c) Não foi possível obter informações do funcionário no contra-cheque "
+            f"({paycheck.file_path})"
+          )
         
-      payroll_salaries.append({
-        "matricula": matricula,
-        "salario_liquido": salario_liquido
-      })
+        payroll_salaries.append({
+          "matricula": matricula,
+          "salario_liquido": salario_liquido
+        })
       
     return payroll_salaries
     

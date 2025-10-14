@@ -1,7 +1,7 @@
 from datetime import date
 from typing import List, Optional
 
-from domain.payroll import Employee, Paycheck, PayrollRemittance
+from domain.payroll import Employee, PayrollRemittance
 from repositories.payroll_repository import PayrollRepository
 from services.notification_service import NotificationService
 from services.spreadsheet_service import SpreadsheetService
@@ -37,7 +37,7 @@ class PayrollService:
         # Get employee data and paychecks from repository
         employees = self.repository.get_employees(reference_date)
         paychecks = self.repository.get_paychecks(reference_date, unified_paycheck)
-        
+        print("employees", employees)
         # Create remittance batch
         total = sum(paycheck.amount for paycheck in paychecks)
         batch = PayrollRemittance(
