@@ -1,10 +1,11 @@
 """Helper module for extracting information from paycheck PDFs."""
+import re
 from typing import Optional
 
 
 # Constants for employee data extraction
-EMPLOYEE_DATA_ROW = 2
-REGISTRATION_COLUMN = -2  # Format: NAME SURNAME CODE HIRE_DATE
+EMPLOYEE_DATA_ROW = 3
+REGISTRATION_COLUMN = 0
 
 
 def extract_matricula(page_content: str) -> int:
@@ -35,8 +36,6 @@ def extract_net_salary(page_content: str) -> Optional[str]:
     Returns:
         Optional[str]: The net salary amount without dots, or None if not found
     """
-    import re
-    
     lines = page_content.split("\n")
     
     for line in lines:

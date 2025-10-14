@@ -1,8 +1,11 @@
-from datetime import date
-from typing import List, Optional
+import pdfplumber
 import os
 import pandas
 import csv
+import shutil
+
+from datetime import date
+from typing import List, Optional
 from pypdf import PdfReader, PdfWriter
 
 from domain.payroll import Employee, Paycheck, PayrollRemittance
@@ -114,7 +117,7 @@ class PayrollRepository:
                 reference_date.year,
                 registration
             )
-            
+            print(f"AQUI: {employee_name}")
             if not employee_name or registration == 0:
                 raise ValueError(
                     f"Não foi possível obter informações do funcionário no contra-cheque "
@@ -165,64 +168,60 @@ class PayrollRepository:
         for employee in self.get_employees(reference_date):
             employees_dict[employee.registration] = employee
 
-        reader = PdfReader(paychecks_file)
+        with pdfplumber.open(paychecks_file) as pdf:
+            reader = PdfReader(paychecks_file)
 
-        for page_idx in range(len(reader.pages)):
-            page = reader.pages[page_idx]
-            page_content = page.extract_text()
+            for page_num, page in enumerate(pdf.pages):
+                page_content = page.extract_text()
+                print(f"Processando página {page_num}...")
 
-            print(f"Processando página {page_idx}...")
+                if not self._is_paycheck_page(page_content):
+                    continue
 
-            if not self._is_paycheck_page(page_content):
-                continue
+                registration = self._extract_registration_from_paycheck(page_content)
 
-            registration = self._extract_registration_from_paycheck(page_content)
-
-            employee_name = get_first_last_name_employee(
-                reference_date.year,
-                registration
-            )
-
-            if not employee_name or registration == 0:
-                raise ValueError(
-                    f"Não foi possível obter informações do funcionário no contra-cheque "
-                    f"({registration=}, {employee_name=})"
+                employee_name = get_first_last_name_employee(
+                    reference_date.year,
+                    registration
                 )
 
-            filename = get_employee_payckeck_filename(registration, employee_name)
-            output_file = f"{paychecks_dest}\\{filename}"
+                if not employee_name or registration == 0:
+                    raise ValueError(
+                        f"Não foi possível obter informações do funcionário no contra-cheque "
+                        f"({registration=}, {employee_name=})"
+                    )
 
-            self._save_paycheck_page(page, output_file)
+                filename = get_employee_payckeck_filename(registration, employee_name)
+                output_file = f"{paychecks_dest}\\{filename}"
 
-            # Extrair valor do contracheque
-            amount_str = self._extract_net_salary(page_content)
-            if not amount_str:
-                raise ValueError(
-                    f"Não foi possível extrair o valor líquido do contra-cheque "
-                    f"do funcionário {employee_name} (matrícula {registration})"
+                print(f"Nome: {employee_name}")
+                self._save_paycheck_page(reader.pages[page_num], output_file)
+
+                amount_str = self._extract_net_salary(page_content)
+                if not amount_str:
+                    raise ValueError(
+                        f"Não foi possível extrair o valor líquido do contra-cheque "
+                        f"do funcionário {employee_name} (matrícula {registration})"
+                    )
+
+                amount = float(amount_str.replace(",", "."))
+
+                # Tentar encontrar funcionário na planilha
+                registration_str = str(registration).zfill(3)
+                employee = employees_dict.get(registration_str)
+                if not employee:
+                    print(f"Aviso: Funcionário {employee_name} (matrícula {registration_str}) não encontrado na planilha")
+                    print("       Dados bancários não serão incluídos na remessa")
+
+                paycheck = Paycheck(
+                    employee=employee,
+                    amount=amount,
+                    reference_date=reference_date,
+                    file_path=output_file
                 )
 
-            amount = float(amount_str.replace(",", "."))
-
-            # Usar dados do funcionário já carregado
-            employee = employees_dict.get(str(registration))
-            if not employee:
-                # Se não encontrar, criar um novo sem dados bancários
-                employee = Employee(
-                    name=employee_name,
-                    email=None,
-                    registration=str(registration)
-                )
-
-            paycheck = Paycheck(
-                employee=employee,
-                amount=amount,
-                reference_date=reference_date,
-                file_path=output_file
-            )
-
-            paychecks.append(paycheck)
-
+                paychecks.append(paycheck)
+            
         return paychecks
 
     def _is_paycheck_page(self, page_content: str) -> bool:
@@ -231,18 +230,13 @@ class PayrollRepository:
 
     def _extract_registration_from_paycheck(self, page_content: str) -> int:
         """Extract employee registration from paycheck content."""
-        ROW_EMPLOYEE_DATA = 2
-        COL_MATRICULA = -2
-        lines = page_content.split("\n")
-        print(f"Linhas: {lines}")
-        matricula = lines[ROW_EMPLOYEE_DATA].strip().split(" ")[COL_MATRICULA]
-        return int(matricula) if matricula else 0
+        return extract_matricula(page_content)
 
     def _save_paycheck_page(self, page, filename: str) -> None:
         """Save a single paycheck page to PDF file."""
         writer = PdfWriter()
         writer.add_page(page)
-
+        
         with open(filename, "wb") as out:
             writer.write(out)
 
@@ -270,11 +264,15 @@ class PayrollRepository:
             print(f"  Conta: {paycheck.employee.bank_account}")
             print(f"  Agência: {paycheck.employee.bank_branch}")
             
-            if (paycheck.amount > 0 and
-                paycheck.employee.bank_account and
-                paycheck.employee.bank_branch):
+            # Verificar cada condição separadamente
+            if paycheck.amount <= 0:
+                print(f"  -> NÃO incluído na remessa: valor zerado ou negativo")
+            elif not paycheck.employee.bank_account:
+                print(f"  -> NÃO incluído na remessa: conta bancária não informada")
+            elif not paycheck.employee.bank_branch:
+                print(f"  -> NÃO incluído na remessa: agência bancária não informada")
+            else:
                 print(f"  -> Incluído na remessa")
-                
                 remittance_data.append({
                     "matricula": paycheck.employee.registration,
                     "nome": paycheck.employee.name,
@@ -283,8 +281,6 @@ class PayrollRepository:
                     "conta": paycheck.employee.bank_account,
                     "salario": paycheck.amount
                 })
-            else:
-                print(f"  -> NÃO incluído na remessa")
 
         # Salvar arquivo CSV
         print(f"Dados para remessa: {len(remittance_data)} funcionários")
@@ -428,12 +424,16 @@ class PayrollRepository:
             # Criar novo nome do arquivo
             new_name = f"{employee.registration}-{employee.name}-pagamento.pdf"
             
-            # Mover arquivo da pasta temp para a pasta de comprovantes
-            os.rename(
-                f"{temp_folder}\\{receipt_file}",
-                f"{receipts_folder}\\{new_name}"
-            )
+            # Verificar se arquivo já existe no destino
+            source_path = os.path.join(temp_folder, receipt_file)
+            dest_path = os.path.join(receipts_folder, new_name)
             
+            if os.path.exists(dest_path):
+                print(f"  -> ERRO: Arquivo já existe no destino: {dest_path}")
+                continue
+                
+            # Mover arquivo da pasta temp para a pasta de comprovantes
+            shutil.move(source_path, dest_path)
             print(f"  -> Arquivo movido para: {receipts_folder}\\{new_name}")
             
         print("Processamento de comprovantes concluído.")
@@ -503,9 +503,19 @@ class PayrollRepository:
             bank_branch=None
         )
         
-    def _rename_receipt(self, folder: str, old_name: str, new_name: str) -> None:
-        """Rename a receipt file."""
-        os.rename(
-            f"{folder}\\{old_name}",
-            f"{folder}\\{new_name}"
-        ) 
+    def _rename_receipt(self, folder: str, old_name: str, new_name: str) -> bool:
+        """
+        Rename a receipt file.
+        
+        Returns:
+            bool: True if rename was successful, False if destination file already exists
+        """
+        source_path = os.path.join(folder, old_name)
+        dest_path = os.path.join(folder, new_name)
+        
+        if os.path.exists(dest_path):
+            print(f"  -> ERRO: Arquivo já existe no destino: {dest_path}")
+            return False
+            
+        shutil.move(source_path, dest_path)
+        return True 
