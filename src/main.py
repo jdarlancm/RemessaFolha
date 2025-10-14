@@ -5,6 +5,7 @@ from repositories.payroll_repository import PayrollRepository
 from services.notification_service import NotificationService
 from services.spreadsheet_service import SpreadsheetService
 from services.payroll_service import PayrollService
+from config.logging_config import setup_logging
 
 VERSION = "1.0.0"
 """
@@ -58,6 +59,10 @@ def prompt_contra_cheques_unificados() -> bool:
 
 
 def main():
+    # Setup logging
+    log_file = setup_logging()
+    print(f"Logs will be saved to: {log_file}")
+    
     # Get user input
     mes = prompt_mes()
     ano = prompt_ano()
