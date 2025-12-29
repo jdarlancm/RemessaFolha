@@ -37,31 +37,45 @@ class SpreadsheetService:
     payroll_salaries = []
     
     for paycheck in remittance.paychecks:
-      if not paycheck.file_path:
-        continue
-        
-      # Extrair dados do contracheque
-      with pdfplumber.open(paycheck.file_path) as pdf:
-        page_content = pdf.pages[0].extract_text()
 
-        # Verificar se é um contracheque
-        if not "RECIBO DE PAGAMENTO DE SALÁRIO" in page_content:
-          continue
-        
-        # Extrair matrícula e salário
-        matricula = paycheck_helper.extract_matricula(page_content)
-        salario_liquido = paycheck_helper.extract_net_salary(page_content)
+      matricula = (
+            paycheck.employee.registration
+            if paycheck.employee and paycheck.employee.registration
+            else None
+        )
       
-        if not salario_liquido or matricula == 0:
-          raise ValueError(
-            f"c) Não foi possível obter informações do funcionário no contra-cheque "
-            f"({paycheck.file_path})"
-          )
-        
-        payroll_salaries.append({
-          "matricula": matricula,
-          "salario_liquido": salario_liquido
-        })
+      if not matricula:
+        continue
+
+      salario_liquido = None
+      if paycheck.amount is not None:
+        salario_liquido = f"{paycheck.amount:.2f}".replace(".", ",")
+      
+      # Extrair dados do contracheque
+      if (not matricula or salario_liquido is None) and paycheck.file_path:
+        with pdfplumber.open(paycheck.file_path) as pdf:
+          page_content = pdf.pages[0].extract_text()
+
+          # Verificar se é um contracheque
+          if "Demonstrativo de Pagamento" not in page_content:
+            continue
+          
+          if not matricula:
+            matricula = paycheck_helper.extract_matricula(page_content)
+          
+          if salario_liquido is None:
+            salario_liquido = paycheck_helper.extract_net_salary(page_content)
+      
+      if not matricula or salario_liquido is None:
+        raise ValueError(
+          f"c) Não foi possível obter informações do funcionário no contra-cheque "
+          f"({paycheck.file_path})"
+        )
+      
+      payroll_salaries.append({
+        "matricula": matricula,
+        "salario_liquido": salario_liquido
+      })
       
     return payroll_salaries
     

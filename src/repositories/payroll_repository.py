@@ -226,7 +226,7 @@ class PayrollRepository:
 
     def _is_paycheck_page(self, page_content: str) -> bool:
         """Check if page is a paycheck."""
-        return "RECIBO DE PAGAMENTO DE SALÁRIO" in page_content
+        return "Demonstrativo de Pagamento" in page_content
 
     def _extract_registration_from_paycheck(self, page_content: str) -> int:
         """Extract employee registration from paycheck content."""

@@ -4,8 +4,8 @@ from typing import Optional
 
 
 # Constants for employee data extraction
-EMPLOYEE_DATA_ROW = 3
-REGISTRATION_COLUMN = 0
+EMPLOYEE_DATA_ROW = 4
+REGISTRATION_COLUMN = 1
 
 
 def extract_matricula(page_content: str) -> int:
@@ -39,12 +39,14 @@ def extract_net_salary(page_content: str) -> Optional[str]:
     lines = page_content.split("\n")
     
     for line in lines:
-        if "VALOR LÍQUIDO" in line:
-            # Procura por um padrão de número com ponto e vírgula após "VALOR LÍQUIDO"
-            match = re.search(r'VALOR\s+LÍQUIDO\s+(\d{1,3}(?:\.\d{3})*,\d{2})', line)
-            if match:
-                value = match.group(1)
-                # Remove os pontos mantendo a vírgula
-                return value.replace(".", "")
+
+        if "Valor Líquido" not in line:
+            continue
+        
+        # Procura valor monetario no formato 1.234,56
+        
+        match = re.search(r'Valor\s+Líquido\s{1,2}(\d{1,3}(?:\.\d{3})*,\d{2})', line)
+        if match:
+            return match.group(1).replace(".", "")
                 
     return None
