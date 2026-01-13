@@ -12,3 +12,4 @@ __pycache__/
 logfile.log
 token.json
 client_secret.json
+src/logs/*

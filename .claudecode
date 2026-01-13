@@ -1,0 +1,361 @@
+# Instruções do Claude Code para RemessaFolha
+
+## Sobre o Projeto
+
+RemessaFolha é um sistema de automação de folha de pagamento que processa contra-cheques, gera remessas bancárias e envia notificações aos funcionários via e-mail.
+
+**Propósito:** Automatizar o processamento completo da folha de pagamento, reduzindo 8 horas de trabalho manual para minutos.
+
+**Fluxo principal:**
+1. **Preparação da Remessa** - Separa PDFs, extrai valores, atualiza planilha Excel, gera CSV de remessa
+2. **Processamento de Comprovantes** - Renomeia e organiza comprovantes bancários
+3. **Notificação de Funcionários** - Envia e-mails com contra-cheques e comprovantes via Gmail API
+
+## Arquitetura do Projeto
+
+### Estrutura de Pastas
+
+```
+src/
+├── config/           # Configurações centralizadas (logging)
+├── domain/          # Modelos de domínio (Employee, Paycheck, PayrollRemittance)
+├── repositories/    # Acesso a dados (PDFs, Excel, CSV)
+├── services/        # Lógica de negócio (PayrollService, NotificationService, GmailService, SpreadsheetService)
+├── helpers/         # Funções auxiliares específicas do domínio
+├── utils/           # Utilitários genéricos e reutilizáveis
+├── ui/              # Interface gráfica CustomTkinter (em desenvolvimento)
+│   ├── components/  # Componentes reutilizáveis
+│   └── windows/     # Janelas da aplicação
+├── logs/            # Arquivos de log
+└── main.py          # CLI principal
+```
+
+### Padrões de Arquitetura
+
+**Arquitetura em Camadas com DDD:**
+
+1. **Domain Layer** (`src/domain/`) - Modelos de domínio usando `@dataclass`, imutáveis
+2. **Repository Layer** (`src/repositories/`) - Abstração de acesso a dados
+3. **Service Layer** (`src/services/`) - Orquestra operações de negócio, usa dependency injection
+4. **Helper Layer** (`src/helpers/`) - Funções auxiliares específicas do domínio
+5. **Utils Layer** (`src/utils/`) - Funções utilitárias genéricas
+
+**Princípios:**
+- Separação clara de responsabilidades
+- Dependency Injection entre serviços
+- Repository Pattern para isolamento de dados
+- Modelos de domínio imutáveis
+
+## Convenções de Código Python
+
+### Nomenclatura
+
+- **Arquivos:** snake_case (ex: `payroll_service.py`, `email_utils.py`)
+- **Classes:** PascalCase (ex: `PayrollRepository`, `NotificationService`)
+- **Funções/métodos:** snake_case (ex: `get_employees()`, `notify_payment()`)
+- **Constantes:** UPPER_SNAKE_CASE (ex: `COL_MATRICULA`, `SCOPES`)
+- **Variáveis privadas:** prefixo `_` (ex: `_extract_payee_from_receipt()`)
+
+### Organização de Código
+
+```python
+# 1. Imports stdlib
+import logging
+import os
+from pathlib import Path
+
+# 2. Imports third-party
+import pandas as pd
+from google.oauth2.credentials import Credentials
+
+# 3. Imports locais
+from src.domain.payroll import Employee, Paycheck
+from src.repositories.payroll_repository import PayrollRepository
+```
+
+### Type Hints
+
+Use type hints em TODAS as funções públicas:
+
+```python
+def get_employees(month: int, year: int) -> list[Employee]:
+    """Retorna lista de funcionários para o mês especificado."""
+    pass
+
+def process_payroll(remittance: PayrollRemittance) -> tuple[int, int]:
+    """Processa folha de pagamento.
+
+    Returns:
+        Tupla com (sucessos, falhas)
+    """
+    pass
+```
+
+### Docstrings
+
+- **Funções públicas:** Docstrings detalhadas em INGLÊS
+- **Lógica de negócio complexa:** Comentários em PORTUGUÊS
+
+```python
+def extract_net_value_from_pdf(pdf_path: Path) -> float:
+    """Extract the net payment value from a paycheck PDF.
+
+    Args:
+        pdf_path: Path to the PDF file
+
+    Returns:
+        Net value as float
+
+    Raises:
+        ValueError: If net value cannot be extracted
+    """
+    # Extrai o texto do PDF usando pdfplumber
+    # Busca padrão "LIQUIDO.*R\\$ ([\\d.,]+)" no texto
+    pass
+```
+
+### Dataclasses
+
+Use `@dataclass` para modelos de domínio:
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Employee:
+    """Represents an employee in the payroll system."""
+    registration: str  # 3 dígitos com zero-padding (ex: "001", "042")
+    name: str
+    email: str
+    bank: str
+    agency: str
+    account: str
+```
+
+### Logging
+
+Use o logger configurado em `src/config/logging_config.py`:
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+
+def process_file(file_path: Path) -> None:
+    logger.info(f"Processing file: {file_path}")
+    try:
+        # código
+        logger.info("File processed successfully")
+    except Exception as e:
+        logger.error(f"Error processing file: {e}")
+```
+
+### Tratamento de Exceções
+
+```python
+# BOM - Específico e informativo
+try:
+    value = extract_net_value(pdf_path)
+except ValueError as e:
+    logger.error(f"Failed to extract value from {pdf_path}: {e}")
+    raise
+
+# EVITE - Exceções genéricas demais
+try:
+    value = extract_net_value(pdf_path)
+except Exception:
+    pass  # Silenciar erros é problemático
+```
+
+## Padrões Específicos do Domínio
+
+### Matrícula de Funcionário
+
+- Sempre 3 dígitos com zero-padding: `"001"`, `"042"`, `"123"`
+- Use `str.zfill(3)` para garantir formato correto
+
+### Nomes de Arquivos
+
+- Contra-cheque: `{MATRICULA}-{NOME}-Contra-Cheque.pdf`
+- Comprovante: `{MATRICULA}-{NOME}-pagamento.pdf`
+- Exemplo: `042-João Silva-Contra-Cheque.pdf`
+
+### Estrutura de Diretórios
+
+```
+{PATH_FOLHA}/{ANO}/{MES:02d}-{nome_mes}/
+├── Contra-Cheque.pdf      # PDF original unificado
+├── comprovantes/          # Arquivos processados
+│   ├── 001-João Silva-Contra-Cheque.pdf
+│   ├── 001-João Silva-pagamento.pdf
+│   └── ...
+└── temp/                  # Arquivos temporários para renomeação
+```
+
+### Valores Monetários
+
+- Extração via regex: `R\\$ ([\\d.,]+)`
+- Conversão: substituir `.` por `` e `,` por `.` antes de converter para float
+- Validação: sempre verificar se valor é positivo
+
+## Boas Práticas de Desenvolvimento
+
+### 1. Evite Over-engineering
+
+**BOM:**
+```python
+def validate_email(email: str) -> bool:
+    """Validate email format."""
+    return "@" in email and "." in email.split("@")[1]
+```
+
+**EVITE:**
+```python
+class EmailValidator:
+    """Complex validator with strategy pattern..."""
+    # Não crie abstrações para casos simples
+```
+
+### 2. Prefira Editar Arquivos Existentes
+
+- SEMPRE prefira `Edit` ao invés de criar novos arquivos
+- Não adicione comentários, docstrings ou type hints em código que você não modificou
+- Não refatore código não relacionado à tarefa
+
+### 3. Validação nos Limites do Sistema
+
+```python
+# BOM - Valida entrada do usuário
+def process_payroll(month: int, year: int):
+    if not (1 <= month <= 12):
+        raise ValueError(f"Invalid month: {month}")
+    # processa...
+
+# EVITE - Validações excessivas de código interno
+def _internal_helper(value: float):
+    if value is None:  # Desnecessário se chamador sempre passa valor válido
+        raise ValueError("Value cannot be None")
+```
+
+### 4. Delete Código Não Utilizado
+
+- Não renomeie variáveis não usadas para `_var`
+- Não adicione comentários `# removed`
+- Delete completamente se não for usado
+
+### 5. Mantenha Simplicidade
+
+- Três linhas similares são melhores que uma abstração prematura
+- Não crie helpers para operações únicas
+- Não adicione feature flags ou compatibilidade retroativa desnecessária
+
+## Tecnologias e Bibliotecas
+
+### Principais Dependências
+
+- **pandas** + **openpyxl** - Manipulação de planilhas Excel
+- **pdfplumber** + **pypdf** - Extração de texto de PDFs
+- **google-api-python-client** - Gmail API para envio de e-mails
+- **customtkinter** - Interface gráfica moderna
+- **python-dotenv** - Variáveis de ambiente
+
+### Testes
+
+- Framework: **pytest**
+- Configuração: `pytest.ini` com `pythonpath = src`
+- Use `@pytest.mark.parametrize` para testes parametrizados
+- Fixtures para setup de ambiente
+
+```python
+import pytest
+
+@pytest.mark.parametrize("email,expected", [
+    ("user@example.com", True),
+    ("invalid.email", False),
+])
+def test_email_validation(email: str, expected: bool):
+    assert validate_email(email) == expected
+```
+
+## Configuração e Ambiente
+
+### Variáveis de Ambiente (.env)
+
+```
+PATH_FOLHA=C:/caminho/para/arquivos/folha
+```
+
+### Google Cloud (OAuth 2.0)
+
+- Credenciais: `src/services/config/client_secret.json`
+- Token: `src/services/config/token.json` (auto-gerado)
+- Scopes: `gmail.send`
+
+### Logging
+
+- Arquivos: `src/logs/remessa_folha_{timestamp}.log`
+- Formato: `%(asctime)s - %(name)s - %(levelname)s - %(message)s`
+- Nível: INFO para aplicação, WARNING para libs Google
+
+## Segurança
+
+### Validações Importantes
+
+1. **Injeção de Comando:** Sempre use `Path` e métodos seguros, nunca concatene strings para comandos shell
+2. **Validação de E-mail:** Use `email_utils.validate_email()` antes de enviar
+3. **Caminhos de Arquivo:** Use `pathlib.Path` e valide que arquivos existem antes de processar
+4. **Dados Bancários:** Valide formato de agência e conta antes de gerar remessa
+
+### Dados Sensíveis
+
+- `client_secret.json` e `token.json` NÃO devem ser commitados
+- `.env` NÃO deve ser commitado (use `.env_example`)
+- Logs podem conter dados pessoais - use nível INFO com cuidado
+
+## Referências de Código
+
+Ao referenciar código, use o formato markdown com links:
+
+- Arquivo: [payroll_service.py](src/services/payroll_service.py)
+- Linha específica: [payroll_service.py:42](src/services/payroll_service.py#L42)
+- Range: [payroll_service.py:42-51](src/services/payroll_service.py#L42-L51)
+
+## Comandos Úteis
+
+```bash
+# Executar CLI
+python src/main.py
+
+# Executar GUI (em desenvolvimento)
+python src/ui/app.py
+
+# Executar testes
+pytest
+
+# Instalar dependências
+pipenv install
+
+# Gerar executável
+pyinstaller remessafolha.spec
+```
+
+## Fluxo de Trabalho
+
+1. **Leia antes de modificar:** NUNCA proponha mudanças sem ler o arquivo primeiro
+2. **Use TodoWrite:** Para tarefas com 3+ passos, use TodoWrite para planejar
+3. **Marque progresso:** Atualize status das tarefas em tempo real
+4. **Teste suas mudanças:** Execute testes relevantes após modificações
+5. **Commits claros:** Mensagens focadas no "por quê", não no "o quê"
+
+## Quando Usar EnterPlanMode
+
+Use EnterPlanMode para:
+- Adicionar novas funcionalidades significativas
+- Mudanças que afetam múltiplos arquivos (3+)
+- Refatorações arquiteturais
+- Quando há múltiplas abordagens válidas
+
+Não use para:
+- Correções de bugs simples
+- Ajustes de uma linha
+- Adição de logs ou comentários
