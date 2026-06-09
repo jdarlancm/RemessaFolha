@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python scripts/test_gmail_service.py:*)",
+      "Bash(pipenv run python:*)"
+    ]
+  }
+}
