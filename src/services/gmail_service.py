@@ -10,6 +10,7 @@ from email.mime.application import MIMEApplication
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import httplib2
@@ -138,8 +139,8 @@ class GmailService:
     try:
       # Cria service com timeout configurado
       http = httplib2.Http(timeout=GmailConfig.DEFAULT_TIMEOUT)
-      self.creds.authorize(http)
-      service = build("gmail", "v1", http=http)
+      authed_http = AuthorizedHttp(self.creds, http=http)
+      service = build("gmail", "v1", http=authed_http)
 
       # Cria mensagem
       message = MIMEMultipart()
